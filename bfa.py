@@ -15,7 +15,11 @@ def initialize(fingerprint):
 
 # Function to perform companding
 def companding(fingerprint):
-	
+	Mu=255
+	for i in range(0,256):
+		x=fingerprint[i]
+		y=math.log(1+Mu)
+		fingerprint[i] = math.log(1+Mu*abs(x))/y
 	return
 
 #Function to output signature
@@ -134,8 +138,8 @@ def main():
 
 	#print(" JSON")
 	#print(rep_json)
-	# Perform companding
-	#companding(fingerprint)
+    Perform companding
+	companding(fingerprint)
 	return
 
 main()
