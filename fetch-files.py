@@ -15,7 +15,7 @@ testing_data = []
 
 # Recursively read directory contents and add to file list
 def read_tika_json(path,mime_type,filelist):
-	if isfile(path):
+	if (os.path.splitext(path)[1][1:] == 'json'):
 		with open(path) as json_data:
 			file_content = json.loads(json_data.read())
 			for mime, filenames in file_content.items():
