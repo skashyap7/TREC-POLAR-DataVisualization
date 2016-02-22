@@ -1,7 +1,6 @@
 
 
 import json
-import os
 import math
 from os import listdir
 from os.path import isfile, join
@@ -20,11 +19,19 @@ def initialize_cc(cc):
            cc[i] = fp
     return
 
+
 # Function to output signature
 def show_signature(fingerprint):
-    print("\n")
+    #print("\n")
     for i in range(0,256):
-        print(fingerprint[i]) #print(fingerprint[i],end="")
+        #print(fingerprint[i])
+        print(round(fingerprint[i],2),end=" ")
+        #print("\n")
+    return
+# Function to print cross_correlation
+def show_cc(cc):
+    for i in range(0,256):
+        show_signature(cc[i])
         print("\n")
     return
 
@@ -112,7 +119,7 @@ def cc_diff(fp,cc):
     for i in range(0,256):
         k=255-i
         while k>=1:
-            cc[255-i][k-1] = fp[k-1]-fp[k]
+            cc[255-i][k-1] = fp[255-i]-fp[k-1]
             k -= 1
     return
 
@@ -121,11 +128,11 @@ def cc_cor(fp,cc):
     for i in range(0,256):
         k=i
         while k<255:
-          x=fp[k]-fp[k+1]
+          x=fp[i]-fp[k+1]
           sigma = 0.0375
           cc[i][k+1] = math.exp(-1*(math.pow(x,2))/(2*(math.pow(sigma,2))))
           k += 1
-    	return
+    return
 
 # Function to generate cross_correlation matrix
 def cc_matrix(fp,cc):
@@ -140,6 +147,7 @@ def update_cc_dif(cc,global_cc):
          while k>=1:
             file_cnt=global_cc[255-i][255-i]
             global_cc[255-i][k-1]=(cc[255-i][k-1]*file_cnt + cc[255-i][k-1])/(file_cnt+1)
+            k -= 1
     return
 
 # Update the byte pair correlation (add to avg cross_correlation matrix)
@@ -150,7 +158,7 @@ def update_cc_cor(cc,global_cc):
           file_cnt=global_cc[i][i]
           global_cc[i][k+1] = (cc[i][k+1]*file_cnt + cc[i][k+1])/(file_cnt+1)
           k += 1
-	return
+    return
 
 #######################################################################################################################
 
@@ -166,8 +174,6 @@ def compute_avg(filelist,global_fingerprint,corelation,global_cc):
         cc={}
         initialize_cc(cc)
         cc_matrix(fp,cc)
-        for j in range(0,256):
-			global_cc[j][j]=i
         if (i==0):
             global_cc=cc
             global_fingerprint=fp
@@ -181,15 +187,22 @@ def compute_avg(filelist,global_fingerprint,corelation,global_cc):
             update_fingerprint(fp,global_fingerprint,i-1)
             update_cc_dif(cc,global_cc)
             update_cc_cor(cc,global_cc)
+        for j in range(0,256):
+         global_cc[j][j]=i+1
+
 
     print(" SIGNATURE")
     show_signature(global_fingerprint)
     myjson = output_json(global_fingerprint)
-    print(myjson)
+    #print(myjson)
+    print("\n")
     print(" CORELATION")
     show_signature(corelation)
+    print("\n")
+    print(" CROSS_C")
+    show_cc(global_cc)
     myjson = output_json(corelation)
-    print(myjson)
+    #print(myjson)
     return
 
 #######################################################################################################################
@@ -197,15 +210,15 @@ def compute_avg(filelist,global_fingerprint,corelation,global_cc):
 # Main code begins here
 def main():
     filelist = []
-    path = "/home/prime/ContentDetection/TrecMimeDetection/"
+    path = "C:\\Users\\Simin\\Desktop\\mimeType\\test"
     read_directory_recur(path,filelist)
+    print(filelist)
     global_fingerprint = {}
     global_cc={}
     corelation = {}
     initialize(global_fingerprint)
     initialize(corelation)
     initialize_cc(global_cc)
-    print(" SIGNATURE")
     compute_avg(filelist,global_fingerprint,corelation,global_cc)
 	#show_signature(global_fingerprint)
 	#rep_json = output_json(global_fingerprint)
