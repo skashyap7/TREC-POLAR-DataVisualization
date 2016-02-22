@@ -4,6 +4,7 @@ import os
 import math
 from os import listdir
 from os.path import isfile, join
+import sys, getopt
 
 # code to calculate the BFA fingerprint for a document
 
@@ -49,18 +50,26 @@ def process_byte(b,fingerprint):
 
 # Read the file and process each byte
 def read_bytes(filename,fingerprint):
-	input_file = open(filename,"rb")
-	try:
-		bytes_from_file = input_file.read(8192)
-		while bytes_from_file:
-			for b in bytes_from_file:
+	if not os.path.exists(filename):
+		print(" File \"{filen}\" could not be found".format(filen = filename))
+		print(" Aborting")
+		sys.exit()
+	# Add a try catch to save file reads
+	with open(filename,"rb") as input_file:
+		try:
+			bytes_from_file = input_file.read(8192)
+			while bytes_from_file:
+				for b in bytes_from_file:
 					#print("read byte: {byte}".format(byte = b))
 					process_byte(b,fingerprint)
-			bytes_from_file = input_file.read(8192)
-	finally:
-		input_file.close
+				bytes_from_file = input_file.read(8192)
+		finally:
+			input_file.close
 
 def read_directory_recur(path,filelist):
+	if not os.path.exists(path):
+		print(" Specified path {pathname} does not exist!".format(pathname=path))
+		sys.exit()
 	for f in listdir(path):
 		if isfile(join(path,f)):
 			#print(join(path,f))
@@ -89,53 +98,177 @@ def update_fingerprint(fp, fingerprint,file_cnt):
 	return
 
 def compute_avg(filelist,global_fingerprint,corelation):
-	for i in range(2,len(filelist)):
+	for i in range(0,len(filelist)):
 		fp = {}
-		filename = filelist[i-1]
+		filename = filelist[i]
 		initialize(fp)
 		read_bytes(filename,fp)
 		normalize_fingerprint(fp)
-		co = cal_corelation(fp,global_fingerprint)
-		if (i == 2):
-			corelation = co
+		if( i > 1):
+			co = cal_corelation(fp,global_fingerprint)
+			if (i == 2):
+				corelation = co
+			else:
+				update_corelation(co,corelation,i)
+		if( i > 1):
+			update_fingerprint(fp,global_fingerprint,i)
 		else:
-			update_corelation(co,corelation,i-1)
-		update_fingerprint(fp,global_fingerprint,i-1)
+			return fp;
+	return global_fingerprint
 
-	print(" SIGNATURE")
-	show_signature(global_fingerprint)
-	myjson = output_json(global_fingerprint)
-	print(myjson)
-	print(" CORELATION")
-	show_signature(corelation)
-	myjson = output_json(corelation)
-	print(myjson)
-	return
-	
-# Main code begins here
-def main():
+def detect(filelist,mimetype):
+	mylist = []
+	error = 0
+	for filename in (filelist):
+		error = 0
+		try:
+			detected_mime = detector.from_file(filename)
+		except IOError:
+			print(" Encountered error for {fname}".format(fname=filename))
+			print("Continuing")
+			error = 1
+		if (detected_mime == mimtype and not error):
+			mylist.append(filename)
+	return mylist
+
+#--------------------------------------------------------------------
+# Wrapper Function
+def target_only_wrap(path):
 	filelist = []
-	path = "/home/prime/ContentDetection/TrecMimeDetection/"
-	read_directory_recur(path,filelist)
-	#print (" File List contents")
-	#print (filelist)
-
-	filename = filelist[0]
 	global_fingerprint = {}
 	corelation = {}
 	initialize(global_fingerprint)
 	initialize(corelation)
-	read_bytes(filename,global_fingerprint)
-	print(" SIGNATURE")
-	#show_signature(global_fingerprint)
-	normalize_fingerprint(global_fingerprint)
-	#rep_json = output_json(global_fingerprint)
-	compute_avg(filelist,global_fingerprint,corelation)
-
-	#print(" JSON")
-	#print(rep_json)
-	# Perform companding
-	#companding(fingerprint)
+	read_directory_recur(path,filelist)
+	global_fingerprint = compute_avg(filelist,global_fingerprint,corelation)
+	# Dump the fingerprint and Co-relation as a JSON to a file
+	print(json.dumps(global_fingerprint,indent=4))
 	return
 
-main()
+def json_only_wrap(json_file):
+	filelist = []
+	with open(json_file,'r') as myjson:
+		try:
+			filelist = json.load(myjson)
+		except ValueError:
+			print(" Invalid JSON provided ")
+			print(" Please ensure your JSON has type")
+			print(" [ file1,")
+			print("   file2,")
+			print("   .....,")
+			print("   filen ]")
+			sys.exit()
+	global_fingerprint = {}
+	corelation = {}
+	initialize(global_fingerprint)
+	initialize(corelation)
+	global_fingerprint = compute_avg(filelist,global_fingerprint,corelation)
+	# Dump the fingerprint and Co-relation as a JSON to a file
+	print(json.dumps(global_fingerprint,indent=4))
+	return
+
+def json_mime_wrap(json_file, mime):
+	filelist = []
+	sublist = []
+	mime_all = 0
+	output_filename = "BFA_latest.json"
+	with open(json_file,'r') as myjson:
+		try:
+			if(mime == "all"):
+				json_data = json.load(myjson)
+				mime_all = 1
+			else:
+				json_data = json.load(myjson)
+				if( mime not in json_data.keys()):
+					print(" No files found for MIME Type {mtype}".format(mtype=mime))
+					sys.exit()
+		except ValueError:
+			print(" Invalid JSON provided ")
+			print(" Please ensure your JSON has type")
+			print(" [ file1,")
+			print("   file2,")
+			print("   .....,")
+			print("   filen ]")
+			sys.exit()
+	if( mime_all == 1):
+		for k in json_data.keys():
+			m_list = json_data.get(k)
+			print(m_list)
+			global_fingerprint = {}
+			corelation = {}
+			initialize(global_fingerprint)
+			initialize(corelation)
+			global_fingerprint = compute_avg(m_list,global_fingerprint,corelation)
+			# Dump the fingerprint and Co-relation as a JSON to a file
+			print(" BFA for {mtype}".format(mtype=k))
+			print(json.dumps(global_fingerprint,indent=4))
+	else:
+		m_list = json_data.get(mime)
+		print(" Total no. of file")
+		print(len(m_list))
+		print("Fingerprint")
+		global_fingerprint = {}
+		corelation = {}
+		initialize(global_fingerprint)
+		initialize(corelation)
+		global_fingerprint = compute_avg(m_list,global_fingerprint,corelation)
+		# Dump the fingerprint and Co-relation as a JSON to a file
+		with open(output_filename,"w") as opfile:
+			json.dump(global_fingerprint,opfile)
+			
+		
+	return
+
+# Main code begins here
+def main(argv):
+	filelist = []
+	json_opt = 0
+	target_opt = 0
+	mime_opt = 0
+	try:
+		opts, args = getopt.getopt(argv,"ht:j:m:",["target=","json=","mime-type="])
+	except getopt.GetoptError:
+		print("bfa.py -t <target_file> -j <json_file> [ -m <mime_type> ]")
+		sys.exit(2)
+	for opt, arg in opts:
+		if opt=='-h':
+			print("bfa.py -t <target_file> -j <json_file> [ -m <mime_type> ]")
+			sys.exit()
+		elif opt in ("-j","--json"):
+			json_file = arg
+			json_opt = 1
+		elif opt in ("-t","--target"):
+			target_dir = arg
+			target_opt = 1
+		elif opt in ("-m","--mime-type"):
+			mime_type = arg
+			mime_opt = 1
+
+	if target_opt and json_opt:
+		print(" Please specify either [-t] or [-j]")
+		sys.exit()
+	elif not target_opt and not json_opt:
+		print("Specify atleast one of [-t] or [-j]")
+		sys.exit()
+	elif target_opt and not mime_opt:
+		target_only_wrap(target_dir)
+		sys.exit()
+	elif json_opt and not mime_opt:
+		json_only_wrap(json_file)
+		sys.exit()
+	elif target_opt and mime_opt:
+		print("Calling target with mime type")
+		sys.exit()
+	elif json_opt and mime_opt:
+		print("Calling Json with mime type")
+		json_mime_wrap(json_file,mime_type)
+		sys.exit()
+	return
+
+if __name__ == "__main__":
+	if len(sys.argv) < 2:
+		print(" Usage : bfa.py -t <target_file> -j <json_file> [ -m <mime_type>]")
+		print("\t -j and -t are mutually exclusive")
+		print("")
+		sys.exit()
+	main(sys.argv[1:])
