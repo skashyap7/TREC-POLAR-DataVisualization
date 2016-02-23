@@ -52,8 +52,10 @@ def process_byte(b,fingerprint):
 def read_bytes(filename,fingerprint):
 	if not os.path.exists(filename):
 		print(" File \"{filen}\" could not be found".format(filen = filename))
-		print(" Aborting")
-		sys.exit()
+		print(" Skipping !")
+		return
+	if (os.path.getsize(filename) == 0):
+		print(" Empty file is {fname}".format(fname=filename))
 	# Add a try catch to save file reads
 	with open(filename,"rb") as input_file:
 		try:
@@ -65,6 +67,7 @@ def read_bytes(filename,fingerprint):
 				bytes_from_file = input_file.read(8192)
 		finally:
 			input_file.close
+	return
 
 def read_directory_recur(path,filelist):
 	if not os.path.exists(path):
@@ -110,10 +113,7 @@ def compute_avg(filelist,global_fingerprint,corelation):
 				corelation = co
 			else:
 				update_corelation(co,corelation,i)
-		if( i > 1):
 			update_fingerprint(fp,global_fingerprint,i)
-		else:
-			return fp;
 	return global_fingerprint
 
 def detect(filelist,mimetype):
@@ -148,9 +148,8 @@ def target_only_wrap(path):
 def json_only_wrap(json_file):
 	filelist = []
 	with open(json_file,'r') as myjson:
-		try:
-			filelist = json.load(myjson)
-		except ValueError:
+		filelist = json.load(myjson)
+		if not isinstance(filelist,list):
 			print(" Invalid JSON provided ")
 			print(" Please ensure your JSON has type")
 			print(" [ file1,")
@@ -191,22 +190,29 @@ def json_mime_wrap(json_file, mime):
 			print("   filen ]")
 			sys.exit()
 	if( mime_all == 1):
+		all_data = {}
 		for k in json_data.keys():
+			print(" Finding fingerprint for {mtype} ".format(mtype=k))
 			m_list = json_data.get(k)
-			print(m_list)
+			print("Using {length} files for computation".format(length=len(m_list)))
 			global_fingerprint = {}
 			corelation = {}
 			initialize(global_fingerprint)
 			initialize(corelation)
 			global_fingerprint = compute_avg(m_list,global_fingerprint,corelation)
 			# Dump the fingerprint and Co-relation as a JSON to a file
-			print(" BFA for {mtype}".format(mtype=k))
-			print(json.dumps(global_fingerprint,indent=4))
+			# {
+			#	"mimetype" => {
+			#					"0":0.5,
+			#                    ....
+			#					}
+			# }
+			#print(" BFA for {mtype}".format(mtype=k))
+			all_data[k] = global_fingerprint
+		print(json.dumps(all_data,indent=4))
 	else:
 		m_list = json_data.get(mime)
-		print(" Total no. of file")
-		print(len(m_list))
-		print("Fingerprint")
+		print(" Total no. of file {l}".format(l=len(m_list)))
 		global_fingerprint = {}
 		corelation = {}
 		initialize(global_fingerprint)
@@ -215,7 +221,6 @@ def json_mime_wrap(json_file, mime):
 		# Dump the fingerprint and Co-relation as a JSON to a file
 		with open(output_filename,"w") as opfile:
 			json.dump(global_fingerprint,opfile)
-			
 		
 	return
 
@@ -257,10 +262,8 @@ def main(argv):
 		json_only_wrap(json_file)
 		sys.exit()
 	elif target_opt and mime_opt:
-		print("Calling target with mime type")
 		sys.exit()
 	elif json_opt and mime_opt:
-		print("Calling Json with mime type")
 		json_mime_wrap(json_file,mime_type)
 		sys.exit()
 	return
