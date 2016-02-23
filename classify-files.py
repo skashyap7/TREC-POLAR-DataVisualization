@@ -69,10 +69,18 @@ def configure(filename):
 # directory
 def detect_and_move(filelist,mapping):
 	for filename in (filelist):
-		detected_mime = detector.from_file(filename)
+		error = 0
+		print(filename)
+		try:
+			detected_mime = detector.from_file(filename)
+		except IOError:
+			print(" Oops ! Something Failed")
+			error = 1
 		#if detected_mime in (config.keys())
 		#	mapping[detected_mime].append(filename)
-		mapping[detected_mime].append(filename)
+		if not error:
+			print("Detected mime type for [fname]".format(fname=filename))
+			mapping[detected_mime].append(filename)
 	return
 
 
@@ -99,7 +107,7 @@ def main(argv):
 	print("DEBUG: Config file is {filename}".format(filename=config_file))
 	print("DEBUG: Target dir is {filename}".format(filename=target_dir))
 			
-	mapping = configure(config_file)
+	#mapping = configure(config_file)
 	read_directory_recur(target_dir,filelist)
 
 	# Call Tika to detect file types and move to directory
