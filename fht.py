@@ -1,78 +1,90 @@
-#!/usr/bin/python3
+#!/usr/bin/python2
 import json
 import os
-import tika
 import math
 from os import listdir
 from os.path import isfile, join
+import sys, getopt
+import tika
+from tika import detector
 
-# code to calculate the FHT fingerprint for a document
+# code to calculate the BFA fingerprint for a document
 
-# Initializing the fingerprint 
-def initialize(fingerprint):
-	for i in range(0,256):
-		fingerprint[i] = 0
-	return
+
+# Initialize Header and Trailer Profile 
+def init_profile( mprofile, hlen):
+	for i in range(0,hlen):
+		fp = [0]*256
+		mprofile.append(fp)
 
 # Function to perform companding
 def companding(fingerprint):
-	
+	Mu=255
+	for i in range(0,256):
+		x=fingerprint[i]
+		y=math.log(1+Mu)
+		fingerprint[i] = math.log(1+Mu*abs(x))/y
 	return
 
-#Function to output signature
-def show_signature(fingerprint):
-	print("\n")
-	for i in range(0,256):
-		print(fingerprint[i],end="")
-	print("\n")
-	return
-
-# Convert to JSON representation
-def output_json(fingerprint):
-	json_ouput = json.dumps(fingerprint)
-	return json_ouput
-
-# Function to normalize the fingerprint
-def normalize_fingerprint(fingerprint):
-	max = 1
-	for i in range(0,256):
-		if fingerprint[i] > max:
-			max = fingerprint[i]
-	# divide all the values by this max values
-	for i in range(0,256):
-		fingerprint[i] = fingerprint[i]/max
-	return
+def display(lol,hlen):
+	for i in range(0,hlen):
+		for j in range(0,256):
+			print(lol[i][j])
+		print()
 
 # Function to process each byte
-def process_byte(b,fingerprint):
-	fingerprint[b] += 1
+def process_byte(b,fingerprint,index):
+	fingerprint[index][b] += 1
 	return
 
 # Read the file and process each byte
-def read_bytes(filename,fingerprint):
-	input_file = open(filename,"rb")
-	try:
-		bytes_from_file = input_file.read(8192)
-		while bytes_from_file:
+def read_bytes(filename,profile,hlen):
+	i = 0
+	if not os.path.exists(filename):
+		print(" File \"{filen}\" could not be found".format(filen = filename))
+		print(" Skipping !")
+		return
+	if (os.path.getsize(filename) == 0):
+		print(" Empty file is {fname}".format(fname=filename))
+	# Add a try catch to save file reads
+	with open(filename,"rb") as input_file:
+		try:
+			bytes_from_file = input_file.read(hlen)
 			for b in bytes_from_file:
-					#print("read byte: {byte}".format(byte = b))
-					process_byte(b,fingerprint)
-			bytes_from_file = input_file.read(8192)
-	finally:
-		input_file.close
+				#print("read byte: {byte}".format(byte = b))
+				process_byte(ord(b),profile,i)
+				i += 1
+		finally:
+			input_file.close
+	return
 
-def read_directory_recur(path,filelist):
+def read_directory_recur(path,filelist,detect=0,mimetype=None):
+	if not os.path.exists(path):
+		print(" Specified path {pathname} does not exist!".format(pathname=path))
+		sys.exit()
 	for f in listdir(path):
 		if isfile(join(path,f)):
 			#print(join(path,f))
-			filelist.append(join(path,f))
+			if detect:
+				error = 0
+				try:
+					filename = join(path,f)
+					detected_mime = detector.from_file(filename)
+				except IOError:
+					print(" Encountered error for {fname}".format(fname=filename))
+					print("Continuing")
+					error = 1
+				if (detected_mime == mimetype and not error):
+					print(" Found a file for {mtype}".format(mtype=mimetype))
+					filelist.append(filename)
+			else:	
+				filelist.append(join(path,f))
 		else:
 			read_directory_recur(join(path,f),filelist)
 	return
 
 def cal_corelation(fp, fingerprint):
-	co = {}
-	initialize(co)
+	co = [0]*256
 	sigma = 0.0375
 	for i in range(0,256):
 		x = fingerprint[i] - fp[i]
@@ -84,54 +96,202 @@ def update_corelation(co,corelation,file_cnt):
 		corelation[i] = (corelation[i]*file_cnt +co[i])/(file_cnt+1)
 	return
 
-def update_fingerprint(fp, fingerprint,file_cnt):
-	for i in range(0,256):
-		fingerprint[i] = (fingerprint[i]*file_cnt + fp[i])/(file_cnt+1)
+def update_profile(fp, fingerprint,file_cnt,hlen):
+	for i in range(0,hlen):
+		for j in range(0,256):
+			fingerprint[i][j] = (fingerprint[i][j]*file_cnt + fp[i][j])/(file_cnt+1)
 	return
 
-def compute_avg(filelist,global_fingerprint,corelation):
-	for i in range(2,len(filelist)+1):
-		fp = {}
-		filename = filelist[i-1]
-		initialize(fp)
-		read_bytes(filename,fp)
-		myjson = output_json(fp)
-		print ("OUTPUT FOR FILE :{index}".format(index=i))
-		print(myjson)
-		#normalize_fingerprint(fp)
-		co = cal_corelation(fp,global_fingerprint)
-		if (i == 2):
-			corelation = co
-		else:
-			update_corelation(co,corelation,i-1)
-		update_fingerprint(fp,global_fingerprint,i-1)
+def compute_fht(filelist,hprofile,hlen):
+	for i in range(0,len(filelist)):
+		hp = []
+		filename = filelist[i]
+		init_profile(hp,hlen)
+		read_bytes(filename,hp,hlen)
+		'''if( i > 1):
+			co = cal_corelation(fp,global_fingerprint)
+			if (i == 2):
+				corelation = co
+			else:
+				update_corelation(co,corelation,i,hlen)a
+		'''
+		update_profile(hp,hprofile,i,hlen)
+	return hprofile
 
-	#print(" SIGNATURE")
-	show_signature(global_fingerprint)
-	#myjson = output_json(global_fingerprint)
-	#myjson = output_json(corelation)
-	#print(myjson)
-	return
-	
-# Main code begins here
-def main():
+def detect(filelist,mimetype):
+	mylist = []
+	error = 0
+	for filename in (filelist):
+		error = 0
+		try:
+			detected_mime = detector.from_file(filename)
+		except IOError:
+			print(" Encountered error for {fname}".format(fname=filename))
+			print("Continuing")
+			error = 1
+		if (detected_mime == mimtype and not error):
+			mylist.append(filename)
+	return mylist
+
+#--------------------------------------------------------------------
+# Wrapper Function
+def target_only_wrap(path,hlen):
 	filelist = []
-	path = "/home/prime/ContentDetection/TrecMimeDetection/test1"
+	output_filename = "FHT_latest.json"
 	read_directory_recur(path,filelist)
-
-	filename = filelist[0]
-	global_fingerprint = {}
-	corelation = {}
-	initialize(global_fingerprint)
-	initialize(corelation)
-	read_bytes(filename,global_fingerprint)
-	normalize_fingerprint(global_fingerprint)
-	compute_avg(filelist,global_fingerprint,corelation)
-
-	#print(" JSON")
-	#print(rep_json)
-	# Perform companding
-	#companding(fingerprint)
+	header_profile = []
+	init_profile(header_profile,hlen)
+	header_profile = compute_fht(filelist,header_profile,hlen)
+	# Dump the fingerprint and Co-relation as a JSON to a file
+	with open(output_filename,"w") as opfile:
+		json.dump(header_profile,opfile)
+		opfile.close()
 	return
 
-main()
+def target_mime_wrap(path,mime,hlen):
+	filelist = []
+	output_filename = "FHT_latest.json"
+	read_directory_recur(path,filelist,1,mime)
+	header_profile = []
+	init_profile(header_profile,hlen)
+	header_profile = compute_fht(filelist,header_profile,hlen)
+	# Dump the fingerprint and Co-relation as a JSON to a file
+	with open(output_filename,"w") as opfile:
+		json.dump(header_profile,opfile)
+		opfile.close()
+	return
+
+def json_only_wrap(json_file,hlen):
+	filelist = []
+	output_filename = "FHT_latest.json"
+	with open(json_file,'r') as myjson:
+		filelist = json.load(myjson)
+		if not isinstance(filelist,list):
+			print(" Invalid JSON provided ")
+			print(" Please ensure your JSON has type")
+			print(" [ file1,")
+			print("   file2,")
+			print("   .....,")
+			print("   filen ]")
+			sys.exit()
+	header_profile = []
+	init_profile(header_profile,hlen)
+	header_profile = compute_fht(filelist,header_profile,hlen)
+	# Dump the fingerprint and Co-relation as a JSON to a file
+	with open(output_filename,"w") as opfile:
+		json.dump(header_profile,opfile)
+		opfile.close()
+	return
+
+def json_mime_wrap(json_file, mime,hlen):
+	filelist = []
+	sublist = []
+	mime_all = 0
+	output_filename = "FHT_latest.json"
+	with open(json_file,'r') as myjson:
+		try:
+			if(mime == "all"):
+				json_data = json.load(myjson)
+				mime_all = 1
+			else:
+				json_data = json.load(myjson)
+				if( mime not in json_data.keys()):
+					print(" No files found for MIME Type {mtype}".format(mtype=mime))
+					sys.exit()
+		except ValueError:
+			print(" Invalid JSON provided ")
+			print(" Please ensure your JSON has type")
+			print(" [ file1,")
+			print("   file2,")
+			print("   .....,")
+			print("   filen ]")
+			sys.exit()
+	if( mime_all == 1):
+		all_data = {}
+		for k in json_data.keys():
+			m_list = json_data.get(k)
+			header_profile = []
+			init_profile(header_profile,hlen)
+			# Dump the fingerprint and Co-relation as a JSON to a file
+			# {
+			#	"mimetype" => {
+			#					"0":0.5,
+			#                    ....
+			#					}
+			# }
+			#print("FHT  for {mtype}".format(mtype=k))
+			header_profile = compute_fht(m_list,header_profile,hlen);
+			all_data[k] = global_fingerprint
+		with open(output_filename,"w") as opfile:
+			json.dump(header_profile,opfile)
+			opfile.close()
+	else:
+		m_list = json_data.get(mime)
+		header_profile = []
+		init_profile(header_profile,hlen)
+		header_profile = compute_fht(m_list,header_profile,hlen)
+		# Dump the fingerprint and Co-relation as a JSON to a file
+		with open(output_filename,"w") as opfile:
+			json.dump(header_profile,opfile)
+			opfile.close()
+		
+	return
+
+# Main code begins here
+def main(argv):
+	filelist = []
+	json_opt = 0
+	target_opt = 0
+	mime_opt = 0
+	hlen = 8
+	try:
+		opts, args = getopt.getopt(argv,"ht:j:m:l:",["target=","json=","mime-type=","len="])
+	except getopt.GetoptError:
+		print("bfa.py -t <target_file> -j <json_file> [ -m <mime_type> ]")
+		sys.exit(2)
+	for opt, arg in opts:
+		if opt=='-h':
+			print(" Usage : fht.py -t <target_file> -j <json_file> [ -m <mime_type>] -len [header/trailer length]")
+			sys.exit()
+		elif opt in ("-j","--json"):
+			json_file = arg
+			json_opt = 1
+		elif opt in ("-t","--target"):
+			target_dir = arg
+			target_opt = 1
+		elif opt in ("-m","--mime-type"):
+			mime_type = arg
+			mime_opt = 1
+		elif opt in ("-l","--len"):
+			hlen = int(arg)
+	if hlen not in (2,4,8):
+		print(" Invalid value for hlen only 2,4,8 allowed")
+		sys.exit()
+	if target_opt and json_opt:
+		print(" Please specify either [-t] or [-j]")
+		sys.exit()
+	elif not target_opt and not json_opt:
+		print("Specify atleast one of [-t] or [-j]")
+		sys.exit()
+	elif target_opt and not mime_opt:
+		target_only_wrap(target_dir,hlen)
+		sys.exit()
+	elif json_opt and not mime_opt:
+		json_only_wrap(json_file,hlen)
+		sys.exit()
+	elif target_opt and mime_opt:
+		target_mime_wrap(target_dir,mime_type,hlen)
+		sys.exit()
+	elif json_opt and mime_opt:
+		json_mime_wrap(json_file,mime_type,hlen)
+		sys.exit()
+	return
+
+if __name__ == "__main__":
+	if len(sys.argv) < 2:
+		print(" Usage : fht.py -t <target_file> -j <json_file> [ -m <mime_type>] -len [header/trailer length]")
+		print("\t -j and -t are mutually exclusive")
+		print("\t Specify the # of header/trailer bytes to be read using -len (default 8)")
+		print("")
+		sys.exit()
+	main(sys.argv[1:])
