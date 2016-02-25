@@ -7,9 +7,9 @@ from os.path import isfile, join
 import sys, getopt
 import tika
 from tika import detector
+import time
 
-# code to calculate the BFA fingerprint for a document
-
+timestamp = str(int(time.time())) # Fetch timestamp to append to the output_file
 
 # Initialize Header and Trailer Profile 
 def init_profile( mprofile, hlen):
@@ -38,7 +38,7 @@ def process_byte(b,fingerprint,index):
 	return
 
 # Read the file and process each byte
-def read_bytes(filename,profile,hlen):
+def read_bytes(filename,profile,hlen,tail=0):
 	i = 0
 	if not os.path.exists(filename):
 		print(" File \"{filen}\" could not be found".format(filen = filename))
@@ -49,6 +49,8 @@ def read_bytes(filename,profile,hlen):
 	# Add a try catch to save file reads
 	with open(filename,"rb") as input_file:
 		try:
+			if tail:
+				input_file.seek(-hlen,2)
 			bytes_from_file = input_file.read(hlen)
 			for b in bytes_from_file:
 				#print("read byte: {byte}".format(byte = b))
@@ -102,19 +104,15 @@ def update_profile(fp, fingerprint,file_cnt,hlen):
 			fingerprint[i][j] = (fingerprint[i][j]*file_cnt + fp[i][j])/(file_cnt+1)
 	return
 
-def compute_fht(filelist,hprofile,hlen):
+def compute_fht(filelist,hprofile,hlen,tail=0):
 	for i in range(0,len(filelist)):
 		hp = []
 		filename = filelist[i]
 		init_profile(hp,hlen)
-		read_bytes(filename,hp,hlen)
-		'''if( i > 1):
-			co = cal_corelation(fp,global_fingerprint)
-			if (i == 2):
-				corelation = co
-			else:
-				update_corelation(co,corelation,i,hlen)a
-		'''
+		if tail:
+			read_bytes(filename,hp,hlen)
+		else:
+			read_bytes(filename,hp,hlen,1)
 		update_profile(hp,hprofile,i,hlen)
 	return hprofile
 
@@ -137,7 +135,7 @@ def detect(filelist,mimetype):
 # Wrapper Function
 def target_only_wrap(path,hlen):
 	filelist = []
-	output_filename = "FHT_latest.json"
+	output_filename = "FHT_"+timestamp+".json"
 	read_directory_recur(path,filelist)
 	header_profile = []
 	init_profile(header_profile,hlen)
@@ -150,11 +148,14 @@ def target_only_wrap(path,hlen):
 
 def target_mime_wrap(path,mime,hlen):
 	filelist = []
-	output_filename = "FHT_latest.json"
+	output_filename = "FHT_"+timestamp+".json"
 	read_directory_recur(path,filelist,1,mime)
 	header_profile = []
+	trailer_profile = []
 	init_profile(header_profile,hlen)
+	init_profile(trailer_profile,hlen)
 	header_profile = compute_fht(filelist,header_profile,hlen)
+	trailer_profile = compute_fht(filelist,header_profile,hlen,1)
 	# Dump the fingerprint and Co-relation as a JSON to a file
 	with open(output_filename,"w") as opfile:
 		json.dump(header_profile,opfile)
@@ -163,7 +164,7 @@ def target_mime_wrap(path,mime,hlen):
 
 def json_only_wrap(json_file,hlen):
 	filelist = []
-	output_filename = "FHT_latest.json"
+	output_filename = "FHT_"+timestamp+".json"
 	with open(json_file,'r') as myjson:
 		filelist = json.load(myjson)
 		if not isinstance(filelist,list):
@@ -175,8 +176,11 @@ def json_only_wrap(json_file,hlen):
 			print("   filen ]")
 			sys.exit()
 	header_profile = []
+	trailer_profile = []
 	init_profile(header_profile,hlen)
+	init_profile(trailer_profile,hlen)
 	header_profile = compute_fht(filelist,header_profile,hlen)
+	trailer_profile = compute_fht(filelist,header_profile,hlen,1)
 	# Dump the fingerprint and Co-relation as a JSON to a file
 	with open(output_filename,"w") as opfile:
 		json.dump(header_profile,opfile)
@@ -187,7 +191,7 @@ def json_mime_wrap(json_file, mime,hlen):
 	filelist = []
 	sublist = []
 	mime_all = 0
-	output_filename = "FHT_latest.json"
+	output_filename = "FHT_"+timestamp+".json"
 	with open(json_file,'r') as myjson:
 		try:
 			if(mime == "all"):
@@ -211,7 +215,9 @@ def json_mime_wrap(json_file, mime,hlen):
 		for k in json_data.keys():
 			m_list = json_data.get(k)
 			header_profile = []
+			trailer_profile = []
 			init_profile(header_profile,hlen)
+			init_profile(trailer_profile,hlen)
 			# Dump the fingerprint and Co-relation as a JSON to a file
 			# {
 			#	"mimetype" => {
@@ -221,15 +227,19 @@ def json_mime_wrap(json_file, mime,hlen):
 			# }
 			#print("FHT  for {mtype}".format(mtype=k))
 			header_profile = compute_fht(m_list,header_profile,hlen);
-			all_data[k] = global_fingerprint
+			trailer_profile = compute_fht(m_list,header_profile,hlen,1)
+			all_data[k] = header_profile
 		with open(output_filename,"w") as opfile:
-			json.dump(header_profile,opfile)
+			json.dump(all_data, opfile)
 			opfile.close()
 	else:
 		m_list = json_data.get(mime)
 		header_profile = []
+		trailer_profile = []
 		init_profile(header_profile,hlen)
+		init_profile(trailer_profile,hlen)
 		header_profile = compute_fht(m_list,header_profile,hlen)
+		trailer_profile = compute_fht(m_list,header_profile,hlen,1)
 		# Dump the fingerprint and Co-relation as a JSON to a file
 		with open(output_filename,"w") as opfile:
 			json.dump(header_profile,opfile)
