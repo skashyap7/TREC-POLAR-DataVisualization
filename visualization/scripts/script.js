@@ -116,57 +116,63 @@ JSON.parse(JSON.stringify(mimetype),function(k,v){
 	}
 	piedata.push(mimedata);	
 })
+display_data(piedata);
 
-var tooltip = d3.select('body').append('div')
-				.attr('id','tooltip')
-				.style('position','absolute')
-				.style('padding','0 10px')
-				.style('background','white')
-				.style('opacity',0)
+function display_data(piedata)
+{
+  
+    var pie = d3.layout.pie()
+    			.value(function(d){
+    				return d.value;
+    			})
 
-var pie = d3.layout.pie()
-			.value(function(d){
-				return d.value;
-			})
+    var arc = d3.svg.arc()
+    			.outerRadius(radius)
 
-var arc = d3.svg.arc()
-			.outerRadius(radius)
+    var color = d3.scale.category10();
 
-var color = d3.scale.category10();
+    var info = d3.select('#analysis').append('div')
+                    .style('position','absolute')
+                    .style('padding','0 10px')
+                    .style('background','white')
+                    .style('color','black')
+                    .style('opacity',0)
 
+    var tooltip = d3.select('#chart').append('div')
+    				.style('position','absolute')
+    				.style('padding','0 10px')
+    				.style('background','white')
+    				.style('color','black')
+    				.style('opacity',0)
 
-
-var tooltip = d3.select('body').append('div')
-				.style('position','absolute')
-				.style('padding','0 10px')
-				.style('background','white')
-				.style('color','black')
-				.style('opacity',0)
-
-var mychart = d3.select("#chart").append('svg')
-	.attr('width', width)
-	.attr('height',height)
-	.append('g')
-	.attr('transform','translate('+ (width-radius )+','+ (height -radius) +')')
-	.selectAll('path').data(pie(piedata))
-	.enter()
-		.append('path')
-		.attr('fill',function(d,i){
-			return colors_google(i);	
-		})
-		.attr('d',arc)
-		.on('mouseover',function(d){
-			tooltip.transition()
-				.style('opacity',0.9)
-			tooltip.html(d.data.name+','+d.data.value)
-				.style('left',d3.event.pageX +'px')
-				.style('top',d3.event.pageY+'px')
-			tempColor = this.style.fill;
-			d3.select(this)
-				.style('opacity',0.8)
-		})
-		.on('mouseout',function(d){
-			d3.select(this)
-				.style('opacity',1)
-				.style('fill',tempColor)
-		});
+    var mychart = d3.select("#chart").append('svg')
+    	.attr('width', width)
+    	.attr('height',height)
+    	.append('g')
+    	.attr('transform','translate('+ (width-radius )+','+ (height -radius) +')')
+    	.selectAll('path').data(pie(piedata))
+    	.enter()
+    		.append('path')
+    		.attr('fill',function(d,i){
+    			return colors_google(i);	
+    		})
+    		.attr('d',arc)
+    		.on('mouseover',function(d){
+    			tooltip.transition()
+    				.style('opacity',0.9)
+    			tooltip.html(d.data.name+','+d.data.value)
+    				.style('left',d3.event.pageX +'px')
+    				.style('top',d3.event.pageY+'px')
+                info.transition()
+                    .style('opacity',0.9)
+                info.html("Total no of "+d.data.name+" files = "+d.data.value)
+    			tempColor = this.style.fill;
+    			d3.select(this)
+    				.style('opacity',0.8)
+    		})
+    		.on('mouseout',function(d){
+    			d3.select(this)
+    				.style('opacity',1)
+    				.style('fill',tempColor)
+    		});
+}
