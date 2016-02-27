@@ -204,7 +204,111 @@ def compute_avg(filelist,global_fingerprint,corelation,global_cc):
     myjson = output_json(corelation)
     #print(myjson)
     return
+#######################################################################################################################
+#######################################################################################################################
 
+# Function for BFC (rest 25% of files)
+def bfc(json_g_fp,filelist):
+    corelation = {}
+    initialize(corelation)
+    data_g_fp=json.loads(json_g_fp)
+    g_fp={}
+    for i in range(0,256):
+        g_fp[i]=data_g_fp[str(i)]
+    for i in range(0,len(filelist)):
+      filename = filelist[i]
+      fp = {}
+      initialize(fp)
+      read_bytes(filename,fp)
+      normalize_fingerprint(fp)
+      co = cal_corelation(fp,g_fp)
+      if (i==0):
+          corelation = co
+      else:
+          update_corelation(co,corelation,i-1)
+    return
+
+# Function to detect assurance_level bfa
+def assurance_bfa(g_c):
+    bfa_assurance=sum(g_c)/len(g_c)
+    return bfa_assurance
+
+
+# Function to detect new file bfa (for application/octet)
+def detect_bfa(json_g_fp,json_g_cfp,filename):
+    fp = {}
+    initialize(fp)
+    read_bytes(filename,fp)
+    normalize_fingerprint(fp)
+    data_g_fp=json.loads(json_g_fp)
+    data_g_cfp=json.loads(json_g_cfp)
+    g_c={}
+    score=0
+    for i in range(0,256):
+        g_c[i]=data_g_cfp[str(i)]
+        score=score+abs(fp[i]-data_g_fp[str(i)])
+    score /= 256
+    bfa_assurance=assurance_bfa(g_c)
+    score=bfa_assurance*math.exp(score)
+    return score
+
+# Function to detect new file bfc - cross correlation (for application/octet)
+def detect_bfc_cc(json_g_cc,filename):
+    fp = {}
+    initialize(fp)
+    read_bytes(filename,fp)
+    normalize_fingerprint(fp)
+    cc={}
+    initialize_cc(cc)
+    cc_matrix(fp,cc)
+    data_g_cc=json.loads(json_g_cc)
+    g_cc={}
+    score=0
+    ind=0
+    for i in range(0,256):
+        k=i
+        while k<255:
+          g_cc[ind] = data_g_cc[str(i)][str(k+1)]
+          ind +=1
+          k += 1
+    for i in range(0,256):
+         k=255-i
+         while k>=1:
+            score=score+abs(cc[255-i][k-1]-data_g_cc[str(255-i)][str(k-1)])
+            k -= 1
+    score /= ind
+    bfcc_assurance=assurance_bfa(g_cc)
+    score=bfcc_assurance*math.exp(score)
+    return score
+
+# Function to detect assurance_level fht
+def assurance_fht(g_cfht):
+    fht_assurance=max(g_cfht)
+    return fht_assurance
+
+# Function to detect new file fht (for application/octet)
+def detect_fht(json_g_fht,filename,t_length):
+    fht = {}                 #must be changed to fht
+    initialize(fht)          #must be changed to fht
+    read_bytes(filename,fht) #must be changed to fht
+    normalize_fingerprint(fht)
+    data_g_fht=json.loads(json_g_fht)
+    g_cfht={}
+    score=0
+    denominator=0
+    ind=0
+    for j in range(0,t_length):
+      for i in range(0,256):
+         g_cfht[ind]=data_g_fht[str(j)][str(i)]
+         ind +=1
+         score=score+fht[j][i]*data_g_fht[str(j)][str(i)]
+         denominator=denominator+data_g_fht[str(j)][str(i)]
+    score = score/denominator
+    fht_assurance=assurance_fht(g_cfht)
+    score=fht_assurance*math.exp(score)
+    return score
+
+#######################################################################################################################
 #######################################################################################################################
 
 # Main code begins here
