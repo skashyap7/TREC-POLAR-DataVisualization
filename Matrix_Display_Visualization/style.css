@@ -1,0 +1,18 @@
+svg {
+   /* height: 2000px;
+    width: 2000px;
+    border: 1px solid gray;*/
+  }
+  g.am-axis text {
+    font-size: 8px;
+  }
+
+  .domain {
+    fill: none;
+  }
+
+  .tick > line{
+    stroke: black;
+    stroke-width: 1px;
+    stroke-opacity: .25;
+  }
