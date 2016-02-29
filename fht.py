@@ -136,10 +136,13 @@ def detect(filelist,mimetype):
 def target_only_wrap(path,hlen):
 	filelist = []
 	output_filename = "FHT_"+timestamp+".json"
-	read_directory_recur(path,filelist)
+	read_directory_recur(path,filelist,1,mime)
 	header_profile = []
+	trailer_profile = []
+	init_profile(trailer_profile,hlen)
 	init_profile(header_profile,hlen)
 	header_profile = compute_fht(filelist,header_profile,hlen)
+	trailer_profile = compute_fht(filelist,header_profile,hlen,1)
 	# Dump the fingerprint and Co-relation as a JSON to a file
 	with open(output_filename,"w") as opfile:
 		json.dump(header_profile,opfile)
@@ -244,24 +247,82 @@ def json_mime_wrap(json_file, mime,hlen):
 		with open(output_filename,"w") as opfile:
 			json.dump(header_profile,opfile)
 			opfile.close()
-		
+	return
+
+# Calculate assurance level
+def get_assurance_level(hp):
+	assurance_level  = 0
+	for i in range(0,hlen):
+		tempmax = max(hp[i])	
+		if tempmax > assurance_level:
+			assurance_level = tempmax
+	return assurance_level
+
+# Calculate Score 
+def calc_score(g_hp,inputfile,hlen):
+	denom = 0
+	score = 0
+	# Steps
+	# Read the input file, create header and trailer profile
+	# Calculate the score using formula Sum(Gn*Cn)/Sum(Gn)
+	# Calculate Assurance level
+	hp = []
+	tp = []
+	init_profile(hp,hlen)
+	init_profile(tp,hlen)
+	read_bytes(inputfile,hp,hlen)
+	read_bytes(inputfile,tp,hlen,1)
+	for i in range(0,hlen):
+		for j in range(0,256):
+			denom += g_hp[i][j]
+	for i in range(0,hlen):
+		for j in range(0,256):
+			score += hp[i][j]*g_hp[i][j]
+	score = score/denom
+	assurance_level = get_assurance_level(hp)
+	return (score*assurance_level)
+	
+def detect_from_fingerprint(masterfile,input_file,hlen):
+	
+	if not os.path.exists(masterfile) :
+		print(" Masterfile for FHT Fingerprints {fname} was not found".format(fname=masterfile))
+		sys.exit()
+	if not os.path.exists(input_file) :
+		print(" Input file not found {fname}".format(fname=input_file))
+		sys.exit()
+	with open(masterfile,"r") as master:
+		try:
+			master_json = json.load(master)
+		except ValueError:
+			print(" Master file is not a valid JSON")
+			print(" Aborting !")
+			sys.exit()
+	for k in master_json.keys():
+		global_profile = master_json[k]
+		score = calc_score(global_profile,input_file,hlen)
+		print(" Score when comparing with {mtype} = {s}".format(mtype=k,s=score)
 	return
 
 # Main code begins here
 def main(argv):
 	filelist = []
+	input_file = ""
 	json_opt = 0
 	target_opt = 0
 	mime_opt = 0
-	hlen = 8
+	detect_opt = 0
+	hlen = 8          # Default value for FHT header/trailer length to be read
+	masterfile = "FHT_Master.json" # Masterfile to be used for reading JSON
 	try:
-		opts, args = getopt.getopt(argv,"ht:j:m:l:",["target=","json=","mime-type=","len="])
+		opts, args = getopt.getopt(argv,"ht:j:m:l:d:",["target=","json=","mime-type=","len=","detect="])
 	except getopt.GetoptError:
-		print("bfa.py -t <target_file> -j <json_file> [ -m <mime_type> ]")
+		print(" Usage : fht.py -t <target_file> -j <json_file> [ -m <mime_type> ]")
+		print(" Usage : fht.py -d|detect <filepath> ")
 		sys.exit(2)
 	for opt, arg in opts:
 		if opt=='-h':
 			print(" Usage : fht.py -t <target_file> -j <json_file> [ -m <mime_type>] -len [header/trailer length]")
+			print(" Usage : fht.py -d|detect <filepath> ")
 			sys.exit()
 		elif opt in ("-j","--json"):
 			json_file = arg
@@ -272,16 +333,31 @@ def main(argv):
 		elif opt in ("-m","--mime-type"):
 			mime_type = arg
 			mime_opt = 1
+		elif opt in ("-d","--detect"):
+			detect_opt = 1
+			masterfile = "FHT_Master.json"
+			input_file = arg
 		elif opt in ("-l","--len"):
 			hlen = int(arg)
+
+	# Validating Options
 	if hlen not in (2,4,8):
 		print(" Invalid value for hlen only 2,4,8 allowed")
+		sys.exit()
+	if target_opt and json_opt and detect_opt:
+		print(" Please specify either [-t] or [-j] or [-d]")
 		sys.exit()
 	if target_opt and json_opt:
 		print(" Please specify either [-t] or [-j]")
 		sys.exit()
-	elif not target_opt and not json_opt:
-		print("Specify atleast one of [-t] or [-j]")
+	elif target_opt and detect_opt:
+		print(" Please specify either [-t] or [-d]")
+		sys.exit()
+	elif json_opt and detect_opt:
+		print(" Please specify either [-t] or [-d]")
+		sys.exit()
+	elif not target_opt and not json_opt and not detect_opt:
+		print("Specify atleast one of [-t] or [-j] or [-d]")
 		sys.exit()
 	elif target_opt and not mime_opt:
 		target_only_wrap(target_dir,hlen)
@@ -295,11 +371,15 @@ def main(argv):
 	elif json_opt and mime_opt:
 		json_mime_wrap(json_file,mime_type,hlen)
 		sys.exit()
+	elif detect_opt:
+		detect_from_fingerprint(masterfile,input_file,hlen)
+		sys.exit()
 	return
 
 if __name__ == "__main__":
 	if len(sys.argv) < 2:
 		print(" Usage : fht.py -t <target_file> -j <json_file> [ -m <mime_type>] -len [header/trailer length]")
+		print(" Usage : fht.py -d|detect <filepath> ")
 		print("\t -j and -t are mutually exclusive")
 		print("\t Specify the # of header/trailer bytes to be read using -len (default 8)")
 		print("")
