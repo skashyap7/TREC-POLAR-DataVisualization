@@ -111,13 +111,13 @@ def compute_avg(filelist,global_fingerprint,corelation):
 		initialize(fp)
 		read_bytes(filename,fp)
 		normalize_fingerprint(fp)
-		if( i > 1):
+		if( i > 0):
 			co = cal_corelation(fp,global_fingerprint)
-			if (i == 2):
+			if (i == 1):
 				corelation = co
 			else:
 				update_corelation(co,corelation,i)
-			update_fingerprint(fp,global_fingerprint,i)
+		update_fingerprint(fp,global_fingerprint,i+1)
 	return global_fingerprint
 
 def detect(filelist,mimetype):
