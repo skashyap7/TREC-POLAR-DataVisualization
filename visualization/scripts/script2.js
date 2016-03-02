@@ -9,15 +9,14 @@ var height = 400,
 	inradius = 100;
 
 var tempColor;
-
 var piedata = [];
-d3.json("../data/github-data.json",function(error,data){
+d3.json("../data/final_rep.json",function(error,data){
 	for ( var k in data)
 	{
 		if(data.hasOwnProperty(k)){
 			var mimetype = {
-				"name": k,
-				"value": data[k]
+				name: k,
+				value: data[k]
 			}
 			piedata.push(mimetype);
 		}
@@ -28,7 +27,8 @@ d3.json("../data/github-data.json",function(error,data){
 function display_data(piedata)
 {
   
-    var pie = d3.layout.pie()
+    console.log(" Came here");
+	var pie = d3.layout.pie()
     			.value(function(d){
     				return d.value;
     			})
