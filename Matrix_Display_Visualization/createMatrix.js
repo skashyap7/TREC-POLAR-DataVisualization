@@ -1,12 +1,28 @@
 var points = 256;
 var maxValue = 32;
 
-window.onload = function(){
-    json.nodes= [];
+window.onload = function() {
+	var selection=$("#matrix_select")
+		for(key in json) {
+			selection.append($("<option>").val(key).html(key))
+		}	
+	selection.on('change', function (e) {
+	   var optionSelected = $("option:selected", this);
+	   var valueSelected = this.value;
+	   $("svg").html('')
+	   create_mime_matrix(valueSelected);
+	});
+	create_mime_matrix(selection.val())
+}
+
+var create_mime_matrix = function(mime){
+    var mime_json = {}
+	mime_json.nodes= [];
+	mime_json.links= json[mime];
     for (var i = 0; i < points; i++) {
-        json.nodes[i] = {};
+        mime_json.nodes[i] = {};
     };
-    createAdjacencyMatrix(json);
+    createAdjacencyMatrix(mime_json);
     d3.select("svg")
     .style("width",(points*10+80)+"px")
     .style("height",(points*10+80)+"px")
@@ -22,11 +38,11 @@ function createAdjacencyMatrix(data) {
     .nodes(data.nodes)
     .links(data.links)
     .directed(false)
-    .nodeID(function (d) {return d.sortedIndex;});
+    .nodeID(function (d) {return d.si;});
 
     var matrixData = adjacencyMatrix();
 
-//console.log(matrixData)
+	//console.log(matrixData)
 
     var someColors = d3.scale.category20c();
     var tempColor;
@@ -37,12 +53,11 @@ function createAdjacencyMatrix(data) {
     .style('opacity',0)
 
     var getColorForValue = function(val){
-       // return someColors(val);
-
-        var r = Math.floor((255 * val) / maxValue),
-                g = Math.floor((255 * (maxValue - val)) / maxValue),
-                b = 100;
-        return "rgb(" + r + "," + g + "," + b + ")";
+       //return someColors(val);
+		var r = Math.floor((255 * val) / maxValue),
+					g = Math.floor((255 * (maxValue - val)) / maxValue),
+					b = 100;
+			return "rgb(" + r + "," + g + "," + b + ")";
     }
 
     d3.select("svg")
@@ -53,23 +68,24 @@ function createAdjacencyMatrix(data) {
     .data(matrixData)
     .enter()
     .append("rect")
-    .attr("width", function (d) {return d.width})
-    .attr("height", function (d) {return d.height})
+    .attr("width", function (d) {return d.w})
+    .attr("height", function (d) {return d.h})
     .attr("x", function (d) {return d.x})
     .attr("y", function (d) {return d.y})
     .style("stroke", "black")
     .style("stroke-width", "1px")
     .style("stroke-opacity", .1)
-    .style("fill", function (d) {return getColorForValue(d.value)})
-    .style("fill-opacity", function (d) {return d.value * .8})
+    .style("fill", function (d) {return getColorForValue(d.v)})
+    .style("fill-opacity", function (d) {return d.v * .8})
 
     .on('mouseover', function(d) {
-        if(d.value <=0) {tooltip.style('display','none'); return;}
-
+		// We need negative values too.
+        if(d.v == 0) {tooltip.style('display','none'); return;}
+		
         tooltip.transition()
         .style('opacity',.9)
 
-        tooltip.html(d.value)
+        tooltip.html(d.v)
         .style('left', (d3.event.pageX -35) + 'px')
         .style('top', (d3.event.pageY - 30) + 'px')
 
@@ -117,23 +133,23 @@ function createAdjacencyMatrix(data) {
       yScale = d3.scale.linear().domain([0,nodes.length]).range([0,height]);
 
       nodes.forEach(function(node, i) {
-        node.sortedIndex = i;
+        node.si = i;
       })
 
       edges.forEach(function(edge) {
-        var constructedEdge = {source: edge.source, target: edge.target, 
+        var constructedEdge = {s: edge.s, t: edge.t, 
           // weight: edgeWeight(edge), 
-          value: edge.value};
-        if (typeof edge.source == "number") {
-          constructedEdge.source = nodes[edge.source];
+          v: edge.v};
+        if (typeof edge.s == "number") {
+          constructedEdge.s = nodes[edge.s];
         }
-        if (typeof edge.target == "number") {
-          constructedEdge.target = nodes[edge.target];
+        if (typeof edge.t == "number") {
+          constructedEdge.t = nodes[edge.t];
         }
-        var id = nodeID(constructedEdge.source) + "-" + nodeID(constructedEdge.target);
+        var id = nodeID(constructedEdge.s) + "-" + nodeID(constructedEdge.t);
 
-        if (directed === false && constructedEdge.source.sortedIndex < constructedEdge.target.sortedIndex) {
-          id = nodeID(constructedEdge.target) + "-" + nodeID(constructedEdge.source);
+        if (directed === false && constructedEdge.s.si < constructedEdge.t.si) {
+          id = nodeID(constructedEdge.t) + "-" + nodeID(constructedEdge.s);
         }
         if (!edgeHash[id]) {
           edgeHash[id] = constructedEdge;
@@ -147,25 +163,25 @@ function createAdjacencyMatrix(data) {
 
       nodes.forEach(function (sourceNode, a) {
         nodes.forEach(function (targetNode, b) {
-          var grid = {id: nodeID(sourceNode) + "-" + nodeID(targetNode), source: sourceNode, target: targetNode, x: xScale(b), y: yScale(a),
+          var grid = {id: nodeID(sourceNode) + "-" + nodeID(targetNode), s: sourceNode, t: targetNode, x: xScale(b), y: yScale(a),
            // weight: 0, 
-           height: nodeHeight, width: nodeWidth, value:0};
+           h: nodeHeight, w: nodeWidth, v:0};
           var edgeWeight = 0;
 		  var edgeValue = 0;
           if (edgeHash[grid.id]) {
             // edgeWeight = edgeHash[grid.id].weight;
             // grid.weight = edgeWeight;
-			edgeValue = edgeHash[grid.id].value;
-			grid.value = edgeValue;
+			edgeValue = edgeHash[grid.id].v;
+			grid.v = edgeValue;
           };
           if (directed === true || b < a) {
             matrix.push(grid);
             if (directed === false) {
-              var mirrorGrid = {id: nodeID(sourceNode) + "-" + nodeID(targetNode), source: sourceNode, target: targetNode, x: xScale(a), y: yScale(b),
+              var mirrorGrid = {id: nodeID(sourceNode) + "-" + nodeID(targetNode), s: sourceNode, t: targetNode, x: xScale(a), y: yScale(b),
                // weight: 0, 
-               height: nodeHeight, width: nodeWidth, value:0};
+               h: nodeHeight, w: nodeWidth, v:0};
               // mirrorGrid.weight = edgeWeight;
-			  mirrorGrid.value = edgeValue;
+			  mirrorGrid.v = edgeValue;
               matrix.push(mirrorGrid);
             }
           }
