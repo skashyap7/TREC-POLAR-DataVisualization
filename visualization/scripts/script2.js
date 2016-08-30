@@ -10,7 +10,7 @@ var height = 400,
 
 var tempColor;
 var piedata = [];
-d3.json("http://skashyap7.github.io/TREC-POLAR-DataVisualization/visualization/data/final_rep.json",function(error,data){
+d3.json("http://skashyap7.github.io/TREC-POLAR-DataVisualization/visualization/data/values.json",function(error,data){
 	for ( var k in data)
 	{
 		if(data.hasOwnProperty(k)){
