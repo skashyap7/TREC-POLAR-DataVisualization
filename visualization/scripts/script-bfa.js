@@ -1,4 +1,4 @@
-d3.json("../data/viz-all.json",function(data){
+d3.json("http://skashyap7.github.io/TREC-POLAR-DataVisualization/visualization/data/viz-all.json",function(data){
 	i = 0;
 	for(var key in data){
 		var bardata = [];
